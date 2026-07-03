@@ -105,6 +105,19 @@
     border-radius:8px;padding:16px 8px;font-weight:800;font-size:15px;cursor:pointer}
   .pick button.on{background:var(--flame);border-color:var(--flame);color:var(--ink)}
   .hidden{display:none}
+
+  /* backup: rarely-touched utility, low weight, bottom of the page */
+  .backup{display:flex;gap:9px;align-items:center;justify-content:center;margin:8px 0 4px}
+  .backup button{background:none;border:none;color:var(--steel);font-family:Inter;
+    font-size:11px;font-weight:600;letter-spacing:.02em;text-decoration:underline;
+    text-decoration-color:var(--edge);cursor:pointer;padding:6px 4px}
+  .backup span{color:var(--edge);font-size:11px}
+
+  .toast{position:fixed;left:50%;bottom:104px;transform:translateX(-50%);
+    background:var(--edge);color:var(--chalk);padding:10px 16px;border-radius:8px;
+    font-size:13px;font-weight:600;max-width:88%;text-align:center;
+    opacity:0;pointer-events:none;transition:opacity .2s;z-index:20}
+  .toast.show{opacity:1}
   @media (prefers-reduced-motion: reduce){*{transition:none!important}}
 </style>
 </head>
@@ -135,6 +148,9 @@
     <button class="link" id="fixDay">fix day</button>
   </div>
 </div>
+
+<input type="file" id="importFile" accept="application/json,.json" class="hidden">
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
 
 <script>
 /* ---------- storage: localStorage when hosted, memory fallback otherwise ---------- */
@@ -235,7 +251,8 @@ function save(){ store.set("state", st); }
 
 function catchUp(){
   const t = today();
-  while(st.asOf < t){
+  let guard = 0; /* safety clamp: converges in <=7 iters normally, this just prevents any runaway */
+  while(st.asOf < t && guard++ < 4000){
     if(LOOP[st.pointer]==="REST"){ st.pointer=(st.pointer+1)%7; st.asOf=addDays(st.asOf,1); }
     else { st.asOf = t; } /* training day not confirmed: loop shifts to today */
   }
@@ -303,6 +320,9 @@ function render(){
       <div><div class="v">193+</div><div class="k">PROTEIN</div></div>
       <div><div class="v">45+</div><div class="k">FAT FLOOR</div></div>
       <div><div class="v">fill</div><div class="k">CARBS</div></div>
+    </div>
+    <div class="backup">
+      <button onclick="exportState()">Export backup</button><span>&middot;</span><button onclick="importState()">Import backup</button>
     </div>`;
 
   app.innerHTML = html;
@@ -355,6 +375,85 @@ document.getElementById("fixDay").onclick=()=>{ pickedDay=null; pickedWeek=st?st
   if(st){ /* preselect week */ const pw=document.getElementById("pickWeek");
     pw.querySelectorAll("button").forEach(x=>x.classList.toggle("on",+x.dataset.w===st.week)); pickedWeek=st.week;
     document.getElementById("setupBudget").value=st.budget; } };
+
+/* ---------- toast ---------- */
+let toastT;
+function toast(msg){
+  const el = document.getElementById("toast");
+  el.textContent = msg; el.classList.add("show");
+  clearTimeout(toastT); toastT = setTimeout(()=>el.classList.remove("show"), 2600);
+}
+
+/* ---------- backup: export state to a file, import to restore ---------- */
+function exportState(){
+  if(!st){ toast("Nothing to back up yet"); return; }
+  const data = JSON.stringify(st, null, 2);
+  const fname = "the-day-backup-" + today() + ".json";
+  /* iOS standalone: the share sheet is the reliable path (lands in Files/iCloud). */
+  try{
+    const file = new File([data], fname, {type:"application/json"});
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      navigator.share({files:[file], title:"THE DAY backup"}).catch(()=>fallbackExport(data, fname));
+      return;
+    }
+  }catch(e){}
+  fallbackExport(data, fname);
+}
+function fallbackExport(data, fname){
+  let downloaded = false;
+  try{
+    const url = URL.createObjectURL(new Blob([data], {type:"application/json"}));
+    const a = document.createElement("a");
+    a.href = url; a.download = fname; document.body.appendChild(a); a.click();
+    setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); }, 1000);
+    downloaded = true;
+  }catch(e){}
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(data)
+      .then(()=>toast(downloaded ? "Backup saved and copied" : "Backup copied to clipboard"))
+      .catch(()=>toast(downloaded ? "Backup saved" : "Copy failed - screenshot as a last resort"));
+  } else {
+    toast(downloaded ? "Backup saved" : "Backup unavailable on this device");
+  }
+}
+
+function importState(){ document.getElementById("importFile").click(); }
+function validState(o){
+  return !!(o && typeof o==="object"
+    && Number.isInteger(o.pointer) && o.pointer>=0 && o.pointer<7
+    && typeof o.asOf==="string" && /^\d{4}-\d{2}-\d{2}$/.test(o.asOf)
+    && (o.week===1||o.week===2||o.week===3)
+    && typeof o.budget==="number" && o.budget>0
+    && o.checks && typeof o.checks==="object");
+}
+document.getElementById("importFile").addEventListener("change", function(){
+  const f = this.files && this.files[0];
+  if(!f){ return; }
+  const r = new FileReader();
+  r.onload = ()=>{
+    try{
+      const obj = JSON.parse(r.result);
+      if(!validState(obj)){ toast("That file isn't a THE DAY backup"); return; }
+      if(!confirm("Replace current state with this backup? This overwrites today's checkboxes and your loop position.")) return;
+      st = obj; save(); render(); window.scrollTo({top:0}); toast("Backup restored");
+    }catch(e){ toast("Couldn't read that file"); }
+  };
+  r.onerror = ()=>toast("Couldn't read that file");
+  r.readAsText(f);
+  this.value = ""; /* allow re-importing the same file later */
+});
+
+/* ---------- offline + durability ---------- */
+if("serviceWorker" in navigator){
+  window.addEventListener("load", ()=>{ navigator.serviceWorker.register("sw.js").catch(()=>{}); });
+}
+if(navigator.storage && navigator.storage.persist){
+  navigator.storage.persist().catch(()=>{});
+}
+/* re-render when the app returns to the foreground so a session left open across midnight
+   rolls to the new day (catchUp + fresh checks) instead of showing a stale day. */
+document.addEventListener("visibilitychange", ()=>{ if(!document.hidden && st) render(); });
+window.addEventListener("focus", ()=>{ if(st) render(); });
 
 if(!st){ showSetup(); } else { render(); }
 </script>
