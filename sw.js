@@ -2,7 +2,7 @@
    Job: make the app launch offline from the home screen, and keep fonts working offline.
    Scope is the directory this file is served from (/the-day/), because it registers with a relative path.
    Bump VERSION on every deploy so the old cache is cleaned in activate. */
-const VERSION = "the-day-v3";
+const VERSION = "the-day-v4";
 const FONTS   = "the-day-fonts-v1";
 const SHELL   = ["./", "./index.html"];
 
@@ -29,10 +29,12 @@ self.addEventListener("fetch", e => {
      fall back to the cached shell when offline. This is what passes the airplane-mode test. */
   if (req.mode === "navigate") {
     e.respondWith(
-      fetch(req)
+      fetch(req, { cache: "no-store" })
         .then(res => {
-          const copy = res.clone();
-          caches.open(VERSION).then(c => c.put("./index.html", copy)).catch(() => {});
+          if (res.ok) { /* only cache a real 200; never persist a 404/502 as the offline shell */
+            const copy = res.clone();
+            caches.open(VERSION).then(c => c.put("./index.html", copy)).catch(() => {});
+          }
           return res;
         })
         .catch(() => caches.match("./index.html").then(hit => hit || caches.match("./")))
@@ -58,8 +60,10 @@ self.addEventListener("fetch", e => {
   if (url.origin === location.origin) {
     e.respondWith(
       caches.match(req).then(hit => hit || fetch(req).then(res => {
-        const copy = res.clone();
-        caches.open(VERSION).then(c => c.put(req, copy)).catch(() => {});
+        if (res.ok) {
+          const copy = res.clone();
+          caches.open(VERSION).then(c => c.put(req, copy)).catch(() => {});
+        }
         return res;
       }).catch(() => hit))
     );
