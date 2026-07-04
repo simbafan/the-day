@@ -113,6 +113,7 @@
     font-size:11px;font-weight:600;letter-spacing:.02em;text-decoration:underline;
     text-decoration-color:var(--edge);cursor:pointer;padding:6px 4px}
   .backup span{color:var(--edge);font-size:11px}
+  .backup .build{color:var(--steel)}
 
   .toast{position:fixed;left:50%;bottom:104px;transform:translateX(-50%);
     background:var(--edge);color:var(--chalk);padding:10px 16px;border-radius:8px;
@@ -176,6 +177,7 @@ function daysBetween(a,b){ const [y1,m1,d1]=a.split("-").map(Number),[y2,m2,d2]=
   return Math.round((new Date(y2,m2-1,d2)-new Date(y1,m1-1,d1))/86400000); }
 
 /* ---------- the program ---------- */
+const BUILD = "v3"; /* bump alongside sw.js VERSION; shown in the backup row to prove what's live on-device */
 const LOOP = ["D1","D2","REST","D3","D4","REST","REST"];
 const NAMES = {D1:"Push", D2:"Lower", D3:"Pull", D4:"Lower+Core", REST:"Rest"};
 /* type: p primer, c compound, i isolation, lat lateral raise, ab abs */
@@ -304,7 +306,8 @@ function render(){
 
   if(doneToday){
     html += `<div class="donewrap"><div class="big">Done</div>
-      <p>Today's session is in the books. Tomorrow: <b style="color:var(--chalk)">${LOOP[st.pointer]} ${LOOP[st.pointer]!=="REST"?NAMES[LOOP[st.pointer]]:""}</b>.</p></div>`;
+      <p>Today's session is in the books. Tomorrow: <b style="color:var(--chalk)">${LOOP[st.pointer]} ${LOOP[st.pointer]!=="REST"?NAMES[LOOP[st.pointer]]:""}</b>.</p>
+      <button class="btn ghost" style="max-width:280px;margin:16px auto 0" onclick="undoDone()">Not done &mdash; back to today</button></div>`;
     html += `<div class="card"><h2>Tonight</h2>${[MEALS_TRAIN.find(m=>m.id==="m4"),MEALS_TRAIN.find(m=>m.id==="gap"),MEALS_TRAIN.find(m=>m.id==="skin"),MEALS_TRAIN.find(m=>m.id==="m5"),MEALS_TRAIN.find(m=>m.id==="out")].map(itemRow).join("")}</div>`;
   } else {
     const isRest = slot==="REST";
@@ -330,7 +333,7 @@ function render(){
       <div><div class="v">fill</div><div class="k">CARBS</div></div>
     </div>
     <div class="backup">
-      <button onclick="exportState()">Export backup</button><span>&middot;</span><button onclick="importState()">Import backup</button>
+      <button onclick="exportState()">Export backup</button><span>&middot;</span><button onclick="importState()">Import backup</button><span>&middot;</span><span class="build">build ${BUILD}</span>
     </div>`;
 
   app.innerHTML = html;
@@ -346,6 +349,11 @@ function sessionDone(){
   window.scrollTo({top:0});
 }
 function missed(){ /* loop holds by design; just acknowledge */ render(); }
+function undoDone(){ /* reverse an accidental sessionDone: step the loop back and clear the done flag */
+  st.pointer = (st.pointer+6)%7;
+  st.asOf = today();
+  save(); render(); window.scrollTo({top:0});
+}
 
 function renderFoot(){
   const seg = document.getElementById("weekSeg");
