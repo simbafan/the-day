@@ -20,8 +20,9 @@
   }
   *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
   body{background:var(--ink);color:var(--chalk);font-family:Inter,system-ui,sans-serif;
-       font-size:15px;line-height:1.45;padding-bottom:90px}
-  .wrap{max-width:560px;margin:0 auto;padding:14px 14px 0}
+       font-size:15px;line-height:1.45;padding-bottom:calc(94px + env(safe-area-inset-bottom))}
+  .wrap{max-width:560px;margin:0 auto;
+    padding:calc(14px + env(safe-area-inset-top)) calc(14px + env(safe-area-inset-right)) 0 calc(14px + env(safe-area-inset-left))}
 
   /* signature: the loop rail */
   .rail{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:14px}
@@ -82,7 +83,7 @@
   .btn:active{transform:translateY(1px)}
 
   .foot{position:fixed;left:0;right:0;bottom:0;background:linear-gradient(transparent,var(--ink) 30%);
-    padding:18px 14px 14px}
+    padding:18px calc(14px + env(safe-area-inset-right)) calc(14px + env(safe-area-inset-bottom)) calc(14px + env(safe-area-inset-left))}
   .foot .in{max-width:560px;margin:0 auto;display:flex;gap:8px;align-items:center;justify-content:space-between}
   .seg{display:flex;gap:4px}
   .seg button{background:var(--iron);border:1px solid var(--edge);color:var(--steel);
@@ -97,7 +98,7 @@
 
   /* setup */
   #setup{position:fixed;inset:0;background:var(--ink);z-index:10;overflow:auto}
-  #setup .wrap{padding-top:38px}
+  #setup .wrap{padding-top:calc(38px + env(safe-area-inset-top))}
   #setup h1{font-family:'Archivo Black',Impact;font-size:34px;text-transform:uppercase;margin-bottom:4px}
   #setup p{color:var(--steel);margin-bottom:18px}
   .pick{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:22px}
@@ -118,6 +119,13 @@
     font-size:13px;font-weight:600;max-width:88%;text-align:center;
     opacity:0;pointer-events:none;transition:opacity .2s;z-index:20}
   .toast.show{opacity:1}
+
+  /* precision: monospace numerals align as columns */
+  .sets,.m,.macrobar .v,.macrobar input,#setupBudget{font-variant-numeric:tabular-nums}
+  /* quality floor: visible keyboard focus on every interactive control */
+  .item:focus-visible,.btn:focus-visible,.seg button:focus-visible,.link:focus-visible,
+  .pick button:focus-visible,.backup button:focus-visible,input:focus-visible,#setupGo:focus-visible{
+    outline:2px solid var(--flame);outline-offset:2px;border-radius:4px}
   @media (prefers-reduced-motion: reduce){*{transition:none!important}}
 </style>
 </head>
@@ -268,7 +276,7 @@ function toggle(id){ const c=checksToday(); c[id]=!c[id]; save(); render(); }
 const app = document.getElementById("app");
 function itemRow(x){
   const on = checksToday()[x.id];
-  return `<div class="item ${on?"on":""}" onclick="toggle('${x.id}')">
+  return `<div class="item ${on?"on":""}" role="button" tabindex="0" aria-pressed="${on?"true":"false"}" onclick="toggle('${x.id}')">
     <div class="box"></div>
     <div class="tx">${x.tx}${x.m?`<span class="m">${x.m}</span>`:""}</div></div>`;
 }
@@ -276,7 +284,7 @@ function liftRow(x, week){
   const s = setsFor(x, week);
   const on = checksToday()["lx_"+x.n];
   const sets = x.t==="skip" ? "SKIP" : x.t==="p" ? x.r : `${s} x ${x.r}`;
-  return `<div class="item ${on?"on":""}" onclick="toggle('lx_${x.n}')">
+  return `<div class="item ${on?"on":""}" role="button" tabindex="0" aria-pressed="${on?"true":"false"}" onclick="toggle('lx_${x.n}')">
     <div class="box"></div>
     <div class="tx">${x.n}${x.cue?`<div class="cue">${x.cue}</div>`:""}</div>
     <div class="sets">${sets}</div></div>`;
@@ -454,6 +462,13 @@ if(navigator.storage && navigator.storage.persist){
    rolls to the new day (catchUp + fresh checks) instead of showing a stale day. */
 document.addEventListener("visibilitychange", ()=>{ if(!document.hidden && st) render(); });
 window.addEventListener("focus", ()=>{ if(st) render(); });
+/* keyboard: Enter/Space toggles a focused checklist item */
+document.addEventListener("keydown", e=>{
+  if(e.key==="Enter" || e.key===" " || e.key==="Spacebar"){
+    const it = e.target && e.target.closest && e.target.closest(".item");
+    if(it){ e.preventDefault(); it.click(); }
+  }
+});
 
 if(!st){ showSetup(); } else { render(); }
 </script>

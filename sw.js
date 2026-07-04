@@ -2,7 +2,7 @@
    Job: make the app launch offline from the home screen, and keep fonts working offline.
    Scope is the directory this file is served from (/the-day/), because it registers with a relative path.
    Bump VERSION on every deploy so the old cache is cleaned in activate. */
-const VERSION = "the-day-v1";
+const VERSION = "the-day-v2";
 const FONTS   = "the-day-fonts-v1";
 const SHELL   = ["./", "./index.html"];
 
